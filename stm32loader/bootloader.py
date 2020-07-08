@@ -261,6 +261,57 @@ class Stm32Bootloader:
 
     DATA_TRANSFER_SIZE = 256  # bytes
     FLASH_PAGE_SIZE = 1024  # bytes
+    
+    DATA_TRANSFER_SIZE_ = {
+        # No unique id for these parts
+        "F0": 256,  # bytes
+        # ST RM0008 section 30.1 Unique device ID register
+        # F101, F102, F103, F105, F107
+        "F1": 256,  # bytes
+        # ST RM0366 section 29.1 Unique device ID register
+        # ST RM0365 section 34.1 Unique device ID register
+        # ST RM0316 section 34.1 Unique device ID register
+        # ST RM0313 section 32.1 Unique device ID register
+        # F303/328/358/398, F301/318, F302, F37x
+        "F3": 256,  # bytes
+        # ST RM0090 section 39.1 Unique device ID register
+        # F405/415, F407/417, F427/437, F429/439
+        "F4": 256,  # bytes
+        # ST RM0385 section 41.2 Unique device ID register
+        "F7": 256,  # bytes
+        # ST RM0394 47.1 Unique device ID register (96 bits)
+        "L4": 256,  # bytes
+        # ST RM0451 25.2 Unique device ID register (96 bits)
+        "L0": 128,  # bytes
+        # ST RM0444 section 38.1 Unique device ID register
+        "G0": 256,  # bytes
+    }
+    
+    FLASH_PAGE_SIZE_ = {
+        # ST RM0360 section 27.1 Memory size data register
+        # F030x4/x6/x8/xC, F070x6/xB
+        "F0": 1024,  # bytes
+        # ST RM0008 section 30.2 Memory size registers
+        # F101, F102, F103, F105, F107
+        "F1": 1024,  # bytes
+        # ST RM0366 section 29.2 Memory size data register
+        # ST RM0365 section 34.2 Memory size data register
+        # ST RM0316 section 34.2 Memory size data register
+        # ST RM0313 section 32.2 Flash memory size data register
+        # F303/328/358/398, F301/318, F302, F37x
+        "F3": 2048,  # bytes
+        # ST RM0090 section 39.2 Flash size
+        # F405/415, F407/417, F427/437, F429/439
+        "F4": 1024,  # bytes
+        # ST RM0385 section 41.2 Flash size
+        "F7": 1024,  # bytes
+        # ST RM0394
+        "L4": 1024,  # bytes
+        # ST RM4510 25.1 Memory size register
+        "L0": 128,  # bytes
+        # ST RM0444 section 38.2 Flash memory size data register
+        "G0": 1024,  # bytes
+    }
 
     SYNCHRONIZE_ATTEMPTS = 2
 
@@ -286,6 +337,10 @@ class Stm32Bootloader:
         self.verbosity = verbosity
         self.show_progress = show_progress or ShowProgress(None)
         self.extended_erase = False
+
+    def setDataTransferAndFlashPageSize(self, device_family):
+        self.DATA_TRANSFER_SIZE = self.DATA_TRANSFER_SIZE_[device_family]
+        self.FLASH_PAGE_SIZE = self.FLASH_PAGE_SIZE_[device_family]
 
     def write(self, *data):
         """Write the given data to the MCU."""
