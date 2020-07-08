@@ -21,6 +21,8 @@
 """Flash firmware to STM32 microcontrollers over a serial connection."""
 
 
+from __future__ import print_function
+
 import getopt
 import os
 import sys
@@ -73,6 +75,7 @@ class Stm32Loader:
             "data_file": None,
         }
         self.verbosity = DEFAULT_VERBOSITY
+        self.flash_size = 16
 
     def debug(self, level, message):
         """Log a message to stderror if its level is low enough."""
@@ -171,7 +174,11 @@ class Stm32Loader:
                 sys.exit(1)
         if self.configuration["erase"]:
             try:
-                self.stm32.erase_memory()
+                pages_to_erase = None
+                if self.configuration["family"] == "L0":
+                    pages_to_erase = range(self.flash_size * 8 - 1)
+                    self.debug(10, "pages_to_erase: %d" % len(pages_to_erase))
+                self.stm32.erase_memory(pages_to_erase)
             except bootloader.CommandError:
                 # may be caused by readout protection
                 self.debug(
@@ -266,12 +273,12 @@ Usage: %s [-hqVeuwvrsRB] [-l length] [-p port] [-b baud] [-P parity]
             return
 
         try:
-            if family != "F4":
+            try:
                 flash_size = self.stm32.get_flash_size(family)
                 device_uid = self.stm32.get_uid(family)
-            else:
-                # special fix for F4 devices
-                flash_size, device_uid = self.stm32.get_flash_size_and_uid_f4()
+            except bootloader.CommandError:
+                # special fix for L0 and F4 devices
+                flash_size, device_uid = self.stm32.get_flash_size_and_uid(family)
         except bootloader.CommandError as e:
             self.debug(
                 0, "Something was wrong with reading chip family data: " + str(e),
@@ -281,6 +288,7 @@ Usage: %s [-hqVeuwvrsRB] [-l length] [-p port] [-b baud] [-P parity]
         device_uid_string = self.stm32.format_uid(device_uid)
         self.debug(0, "Device UID: %s" % device_uid_string)
         self.debug(0, "Flash size: %d KiB" % flash_size)
+        self.flash_size = flash_size
 
     def _parse_option_flags(self, options):
         # pylint: disable=eval-used
@@ -342,6 +350,7 @@ def main(*args, **kwargs):
         loader.parse_arguments(args)
         loader.connect()
         try:
+            loader.stm32.setDataTransferAndFlashPageSize(loader.configuration["family"])
             loader.read_device_id()
             loader.read_device_uid()
             loader.perform_commands()
