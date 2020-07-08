@@ -20,6 +20,8 @@
 """Talk to an STM32 native bootloader (see ST AN3155)."""
 
 
+from __future__ import print_function
+
 import math
 import operator
 import struct
@@ -42,6 +44,7 @@ CHIP_IDS = {
     # 768 to 1024 KiB
     0x430: "STM3210xx XL-density",
     # flash size to be looked up
+    0x417: "STM32L05xxx/06xxx",
     0x416: "STM32L1xxx6(8/B) Medium-density ultralow power line",
     0x411: "STM32F2xxx",
     0x433: "STM32F4xxD/E",
@@ -217,6 +220,8 @@ class Stm32Bootloader:
         "F7": 0x1FF0F420,
         # ST RM0394 47.1 Unique device ID register (96 bits)
         "L4": 0x1FFF7590,
+        # ST RM0451 25.2 Unique device ID register (96 bits)
+        "L0": 0x1FF80050,
         # ST RM0444 section 38.1 Unique device ID register
         "G0": 0x1FFF7590,
     }
@@ -248,6 +253,8 @@ class Stm32Bootloader:
         "F7": 0x1FF0F442,
         # ST RM0394
         "L4": 0x1FFF75E0,
+        # ST RM4510 25.1 Memory size register
+        "L0": 0x1FF8007C,
         # ST RM0444 section 38.2 Flash memory size data register
         "G0": 0x1FFF75E0,
     }
@@ -289,8 +296,8 @@ class Stm32Bootloader:
 
     def write_and_ack(self, message, *data):
         """Write data to the MCU and wait until it replies with ACK."""
-        # Note: this is a separate method from write() because a keyword
-        # argument after *args was not possible in Python 2
+        # this is a separate method from write() because a keyword
+        # argument after *args is not possible in Python 2
         self.write(*data)
         return self._wait_for_ack(message)
 
@@ -388,21 +395,29 @@ class Stm32Bootloader:
         flash_size = flash_size_bytes[0] + (flash_size_bytes[1] << 8)
         return flash_size
 
-    def get_flash_size_and_uid_f4(self):
+    def get_flash_size_and_uid(self, device_family):
         """
-        Return device_uid and flash_size for F4 family.
+        Return device_uid and flash_size for L0 and F4 family.
 
         For some reason, F4 (at least, NUCLEO F401RE) can't read the 12 or 2
         bytes for UID and flash size directly.
         Reading a whole chunk of 256 bytes at 0x1FFFA700 does work and
         requires some data extraction.
         """
-        data_start_addr = 0x1FFF7A00
-        flash_size_lsb_addr = 0x22
-        uid_lsb_addr = 0x10
+        flash_size_address = int(self.FLASH_SIZE_ADDRESS[device_family])
+        uid_address = int(self.UID_ADDRESS.get(device_family, self.UID_ADDRESS_UNKNOWN))
+        
+        data_start_addr = (uid_address & 0xFFFFFF00)
+        flash_size_lsb_addr = flash_size_address - data_start_addr
+        uid_lsb_addr = uid_address - data_start_addr
+        self.debug(10, 'flash_size_address = 0x%X' % flash_size_address)
+        self.debug(10, 'uid_address = 0x%X' % uid_address)
+        #self.debug(10, 'data_start_addr =0x%X' % data_start_addr)
+        #self.debug(10, 'flash_size_lsb_addr =0x%X' % flash_size_lsb_addr)
+        #self.debug(10, 'uid_lsb_addr = 0x%X' % uid_lsb_addr)
         data = self.read_memory(data_start_addr, self.DATA_TRANSFER_SIZE)
         device_uid = data[uid_lsb_addr : uid_lsb_addr + 12]
-        flash_size = data[flash_size_lsb_addr] + data[flash_size_lsb_addr + 1] << 8
+        flash_size = data[flash_size_lsb_addr] + (data[flash_size_lsb_addr + 1] << 8)
         return flash_size, device_uid
 
     def get_uid(self, device_id):
@@ -539,7 +554,7 @@ class Stm32Bootloader:
                     "Can not erase more than 65535 pages at once.\n"
                     "Set pages to None to do global erase or supply fewer pages."
                 )
-            page_count = (len(pages) & 0xFF) - 1
+            page_count = (len(pages) & 0xFFFF) - 1
             page_count_bytes = bytearray(struct.pack(">H", page_count))
             page_bytes = bytearray(len(pages) * 2)
             for i, page in enumerate(pages):
