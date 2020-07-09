@@ -174,20 +174,20 @@ class Stm32Loader:
                 sys.exit(1)
         if self.configuration["erase"]:
             try:
-                pages_to_erase = None
-                if self.configuration["family"] == "L0":
-                    pages_to_erase = range(self.flash_size * 8 - 1)
-                    self.debug(10, "pages_to_erase: %d" % len(pages_to_erase))
-                self.stm32.erase_memory(pages_to_erase)
+                self.stm32.erase_memory()
             except bootloader.CommandError:
-                # may be caused by readout protection
-                self.debug(
-                    0,
-                    "Erase failed -- probably due to readout protection\n"
-                    "consider using the -u (unprotect) option.",
-                )
-                self.stm32.reset_from_flash()
-                sys.exit(1)
+                try: 
+                    self.debug(0, "\tSomething went wrong with extended erase. Trying another way.")
+                    self.stm32.erase_memory(range(int(self.flash_size * 1024/self.stm32.FLASH_PAGE_SIZE_[self.configuration["family"]]) - 1))
+                except bootloader.CommandError:
+                    # may be caused by readout protection
+                    self.debug(
+                        0,
+                        "Erase failed -- probably due to readout protection\n"
+                        "consider using the -u (unprotect) option.",
+                    )
+                    self.stm32.reset_from_flash()
+                    sys.exit(1)
         if self.configuration["write"]:
             self.stm32.write_memory_data(self.configuration["address"], binary_data)
         if self.configuration["verify"]:
