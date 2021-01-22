@@ -20,7 +20,6 @@
 """Talk to an STM32 native bootloader (see ST AN3155)."""
 
 
-from __future__ import print_function
 
 import math
 import operator
